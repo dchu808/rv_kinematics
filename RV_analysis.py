@@ -1,4 +1,7 @@
+##D Chu
+##First added to a git repository
 ##purpose is to rv F-test on rv files
+##this relies on using the polyfit2 group code. Be sure this is in your .bash_profile or .cshrc file
 
 import numpy as np
 import scipy as sp
