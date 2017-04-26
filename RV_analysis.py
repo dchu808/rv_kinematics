@@ -11,44 +11,78 @@ from scipy import stats
 from scipy.stats import f
 import polyfit2 as pfit2
 
-def rv_fit(rv_file,star, poly_degree = 2, drop_test = False, drop_points = 0, print_fit_coeff = False, deg_print = 2):
+def rv_fit(rv_file,star, poly_degree = 2, t0 = 2010., tstart = None, tfin = None,drop_test = False, drop_points = 0, print_fit_coeff = False, deg_print = 2):
+    ##path to rv file
+    ##name of the star
     ##poly degree: 0 is constant v, 1 is constant accel, 2 is jerk, 3 is jounce, 4 is beyond jounce
+    ##t0: centralize the time to this date. The 0th polynomial will be the RV at this time
+    ##tstart: only use data after this date. Keep None if you want to start from beginning of .rv file
+    ##tfin: only use data before this date. Keep None if you want to finish at end of .rv file
+    ##print_fit_coeff : print the coefficients of the fit
+    ##deg_print: the degree polynomial for which to print the coeff
     data = np.genfromtxt(rv_file)
     date_orig_full = data[:,0]
     rv_full = data[:,1]
     rv_err_full = data[:,2]
-    t_middle = 2010. ##can change this
+    t_middle = t0 ##can change this
     t_middle_string = str(t_middle)
     drop_points_string = str(drop_points)
-    # date = date_orig-t_middle
-    # print len(rv)
-    # print len(rv_full[drop_points:])
+
+    ##indeces for time start, these can be changed
+    idx_beg = 0
+    if tstart == None:
+        idx_beg = 0
+    else:    
+        time_start = tstart ##only use data after this time
+        idx_beg =  np.where(time_start < date_orig_full)[0][0] ##indices where the time will start
+    # print idx_beg
+        
+    ##indeces for time start, these can be changed
+    idx_end = len(date_orig_full)
+    if tfin == None:
+        idx_end = len(date_orig_full)
+    else:
+        time_end = tfin ##only use data before this time
+        idx_end =  np.where(time_end < date_orig_full)[0][0] ##indices where the time will finish
+    ##now trim the date file
+    date_orig = date_orig_full[idx_beg:idx_end]
+    # print date_orig
+    # print date_orig_full ##compare to the original dates
+
+    ##trim the other files
+    rv = rv_full[idx_beg:idx_end]
+    rv_err = rv_err_full[idx_beg:idx_end]
+    
+    ##subtract the middle date
+    modified_date = date_orig-t_middle
     
     ##drop points test. 0 equals no drop points. For drop_test = False, drop_points must = 0. Otherwise function won't work anyway
-    date_orig = np.zeros(len(rv_full) - 2*drop_points)
-    rv = np.zeros(len(rv_full) - 2*drop_points)
-    rv_err = np.zeros(len(rv_err_full) - 2*drop_points)
+    # date_orig = np.zeros(len(rv_full) - 2*drop_points)
+    # rv = np.zeros(len(rv_full) - 2*drop_points)
+    # rv_err = np.zeros(len(rv_err_full) - 2*drop_points)
     
 
-    if drop_test == True:
-        ##take away number of points from each end, i.e. 1 = one point removed from both ends
-        rv = rv_full[drop_points:len(rv_full) - drop_points]
-        rv_err = rv_err_full[drop_points:len(rv_err_full) - drop_points]
-        date_orig = date_orig_full[drop_points:len(date_orig_full) - drop_points]
-        date = date_orig-t_middle
-        
-    else:
-        rv = rv_full
-        rv_err = rv_err_full
-        date_orig = date_orig_full
-        date = date_orig-t_middle
+    # if drop_test == True:
+    #     ##take away number of points from each end, i.e. 1 = one point removed from both ends
+    #     rv = rv_full[drop_points:len(rv_full) - drop_points]
+    #     rv_err = rv_err_full[drop_points:len(rv_err_full) - drop_points]
+    #     date_orig = date_orig_full[drop_points:len(date_orig_full) - drop_points]
+    #     date = date_orig-t_middle
+    #     
+    # else:
+    #     rv = rv_full
+    #     rv_err = rv_err_full
+    #     date_orig = date_orig_full
+    #     date = date_orig-t_middle
 
+    print 'Start time'
     print date_orig[0]
+    tstart_string = str(date_orig[0]) ##use this for printing later
+    print 'End time'
     print date_orig[-1]
+    tend_string = str(date_orig[-1]) ##use this for printing later
+    print 'Number of points'
     print len(date_orig)
-    # f_crit_file = asciidata.open('f_crit_a05.txt') ##don't use this value anymore
-    # output = open(star+'_rv_analysis.txt','w')
-    # output_table = open(star+'_rv_analysis_table.txt','w')
     
     ##calculate weights for polyfit
     sigma=1/rv_err ##according to numpy.polyfits manual, you want to use 1/rv_error, not 1/sigma**2
@@ -70,42 +104,36 @@ def rv_fit(rv_file,star, poly_degree = 2, drop_test = False, drop_points = 0, pr
     plt.ylabel('Velocity (km/s)')
     plt.xlim([-10,10])
     plt.ylim([np.min(rv)-100,np.max(rv)+100])
-    plt.title(star+'_drop'+drop_points_string)
-    plt.errorbar(date,rv,yerr=rv_err,fmt='o')
+    plt.title(star+'_'+tstart_string[:4]+'-'+tend_string[:4])
+    plt.errorbar(modified_date,rv,yerr=rv_err,fmt='o')
     ##do calculations for model, and plot it as well    
     for i in range(len(poly_array)):
-        ##polyfits to make the expected models with covariance matrices
-        # p_fit_c = np.polyfit(date,rv,poly_array[i],w=sigma,cov=True) ##no longer using this to get covariance matrix - using polyfit2 from Greg
-        # p_fit_mat = p_fit_c[1]
-        
+
         ##polyfits to make the expected models without covariance matrices
-        p_fit = np.polyfit(date,rv,poly_array[i],w=sigma)
+        # p_fit = np.polyfit(date,rv,poly_array[i],w=sigma)
         
         
         #constructing a polynomial out of the fit
-        p_func= np.poly1d(p_fit)
+        # p_func= np.poly1d(p_fit)
         xp = np.linspace(-10,10,num=40)
         #calculate chi-square of fit
-        expect = p_func(date)
+        # expect = p_func(date)
         chisquare = rv*0
 
         ##going to just be consistent and work with Greg's version of polyfit to check
-        (a, cov) = pfit2.polyfit2(date, rv , deg = poly_array[i], errors = rv_err, taylor = False, t0=0.)##t0 is zero since we decided this in the beginning
+        (a, cov) = pfit2.polyfit2(modified_date, rv , deg = poly_array[i], errors = rv_err, taylor = False, t0=0.)##t0 is zero since we decided this in the beginning
         ##since this will be used for plotting, taylor = False
         ##flip indeces of the fit array
         a_flip = np.flip(a,0)
         p_func_polyfit2= np.poly1d(a_flip)
-        expect_polyfit2 = p_func_polyfit2(date)
+        expect_polyfit2 = p_func_polyfit2(modified_date)
         
-        # for current_index in range(len(rv)):
-        #     x = np.abs((rv[current_index]-expect[current_index])**2/rv_err[current_index]**2) ##this is for numpy version of polyfit
-        #     chisquare[current_index]= x
         for current_index in range(len(rv)):
             x = np.abs((rv[current_index]-expect_polyfit2[current_index])**2/rv_err[current_index]**2) ##polyfit2 version
             chisquare[current_index]= x
     
         ##calculate reduced chi-square
-        DOF=len(date) - (poly_array[i] + 1) - 1
+        DOF=len(modified_date) - (poly_array[i] + 1) - 1
         red_chisquare = np.sum(chisquare)/(DOF)
         red_chi_sq_array[i] = red_chisquare
         DOF_array[i] = DOF
@@ -114,12 +142,11 @@ def rv_fit(rv_file,star, poly_degree = 2, drop_test = False, drop_points = 0, pr
         det_array[i] = np.linalg.det(cov)
 
         ##plot the function now
-        # plt.plot(xp, p_func(xp), linestyle = ls[i],label = poly_array[i]) ##numpy version of polyfit
         plt.plot(xp, p_func_polyfit2(xp), linestyle = ls[i],label = poly_array[i]) ##polyfit2 version from greg
         plt.legend()
 
-    plt.savefig(star+'_drop'+drop_points_string+'_fit_plots.pdf')
-    plt.savefig(star+'_drop'+drop_points_string+'_fit_plots.png')
+    plt.savefig(star+'_'+tstart_string[:4]+'-'+tend_string[:4]+'_fit_plots.pdf')
+    plt.savefig(star+'_'+tstart_string[:4]+'-'+tend_string[:4]+'_fit_plots.png')
     plt.show()
     print 'Reduced Chi-squares'  
     print red_chi_sq_array
@@ -128,24 +155,17 @@ def rv_fit(rv_file,star, poly_degree = 2, drop_test = False, drop_points = 0, pr
 
     if print_fit_coeff == True:
         ##using Greg's version of polyfit to ensure that we get the right covariance
-        (a, cov) = pfit2.polyfit2(date, rv , deg = deg_print, errors = rv_err, taylor = True, t0=0.) ##t0 is zero since we decided this in the beginning
+        (a, cov) = pfit2.polyfit2(modified_date, rv , deg = deg_print, errors = rv_err, taylor = True, t0=0.) ##t0 is zero since we decided this in the beginning
         # print (a, cov)
         print 'fit values from polyfit2 w/ Taylor coeff'
         print a
         print 'sigma values'
         print np.sqrt(cov.diagonal())
-        print 'determinant of covariance matrix'
-        print np.linalg.det(cov)
         # p_fit = np.polyfit(date,rv,deg_print,w=sigma)
         # print 'check with numpy polyfit'
         # print p_fit
         # print cov
     ##check
-    
-    # ##print the header of information
-    # #output_table.write('star')
-    # output_table.write("{0:>15}\t{1:>15}\t{2:>15}\t{3:>15}\n".format('Star','v0','v0_err','v0_chi'))
-    # output_table.write("{0:>15}\t{1:>15.4}\t{2:>15.4}\t{3:>15.4}".format(star,p_fit0_c[0].item(0),np.sqrt(p_fit0_mat.diagonal().item(0)),red_chisquare0))
    
         
     def f_test(chi_l,chi_h):
